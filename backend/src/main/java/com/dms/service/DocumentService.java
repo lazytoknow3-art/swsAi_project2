@@ -10,6 +10,7 @@ import com.dms.mapper.DocumentMapper;
 import com.dms.repository.DocumentRepository;
 import com.dms.sse.SseService;
 import com.dms.storage.StorageService;
+import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -74,6 +75,7 @@ public class DocumentService {
         return results;
     }
 
+    @Transactional
     private Document saveDocument(MultipartFile file, String uploadedBy) throws IOException {
         StorageService.StorageResult stored = storageService.store(file);
         Document document = Document.builder()
@@ -93,6 +95,8 @@ public class DocumentService {
     @Async
     public void processDocumentAsync(Long documentId) {
         try {
+            // Small pause to ensure the save transaction has committed before async thread reads it
+            Thread.sleep(200);
             Document document = documentRepository.findById(documentId).orElseThrow();
             String fileName = document.getOriginalFileName();
 
