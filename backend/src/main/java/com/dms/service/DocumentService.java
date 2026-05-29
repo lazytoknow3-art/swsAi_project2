@@ -100,8 +100,6 @@ public class DocumentService {
             documentRepository.save(document);
             sseService.broadcastDocumentUpdate(documentMapper.toDTO(document));
 
-            Thread.sleep(1500);
-
             document.setUploadStatus(Document.UploadStatus.COMPLETED);
             document.setProcessingCompletedAt(LocalDateTime.now());
             documentRepository.save(document);
@@ -141,8 +139,6 @@ public class DocumentService {
                         document.setUploadStatus(Document.UploadStatus.PROCESSING);
                         documentRepository.save(document);
                         sseService.broadcastDocumentUpdate(documentMapper.toDTO(document));
-
-                        Thread.sleep(1500 + (long) (Math.random() * 1000));
 
                         document.setUploadStatus(Document.UploadStatus.COMPLETED);
                         document.setProcessingCompletedAt(LocalDateTime.now());
