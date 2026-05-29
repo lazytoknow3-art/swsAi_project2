@@ -1,178 +1,247 @@
-# Document Management System (DMS)
+# DocManager — Document Management System
 
-A production-grade full-stack document management dashboard built with Spring Boot and React.
+A full-stack document management dashboard where you can upload, manage, and track PDF files with real-time notifications.
 
-## Architecture
+---
 
-```
-project_sws/
-├── backend/                    # Spring Boot 3.2 + Maven
-│   └── src/main/java/com/dms/
-│       ├── controller/         # REST controllers
-│       ├── service/            # Business logic + @Async processing
-│       ├── repository/         # Spring Data JPA repositories
-│       ├── entity/             # JPA entities (Document, Notification)
-│       ├── dto/                # Request/Response DTOs
-│       ├── mapper/             # Entity ↔ DTO mappers
-│       ├── storage/            # Local disk storage service
-│       ├── sse/                # Server-Sent Events service
-│       ├── config/             # Security, CORS, Async config
-│       ├── exception/          # Global exception handling
-│       └── security/           # JWT utility (auth-ready)
-└── frontend/                   # React 18 + Vite + TypeScript
-    └── src/
-        ├── components/         # Reusable UI components + shadcn/ui
-        ├── pages/              # Dashboard, Upload, Notifications
-        ├── hooks/              # React Query hooks + custom hooks
-        ├── services/           # Axios API layer + SSE client
-        ├── store/              # Zustand stores (notifications, upload, theme)
-        ├── layouts/            # MainLayout with SSE initialization
-        ├── types/              # TypeScript interfaces
-        └── utils/              # Format utilities
-```
+## What It Does
+
+- Upload single or multiple PDF files with drag & drop
+- Track upload progress per file with a progress bar
+- View all uploaded documents in a searchable, sortable table
+- Get real-time notifications when files finish processing
+- Dark / Light mode support
+
+---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18, Vite, TypeScript, Tailwind CSS, shadcn/ui |
-| State | Zustand (client state), TanStack Query (server state) |
-| Realtime | Server-Sent Events (SSE) |
-| Backend | Spring Boot 3.2, Spring Security, Spring Data JPA |
-| Database | MySQL 8+ |
-| Auth | JWT (structure ready, all endpoints open for demo) |
+**Frontend**
+- React 18 + Vite + TypeScript
+- Tailwind CSS + shadcn/ui (components)
+- Zustand (app state), TanStack Query (server state)
+- Axios (API calls), React Router (navigation)
+- Server-Sent Events (real-time updates)
+
+**Backend**
+- Spring Boot 3.2 + Java 21+
+- Spring Security (JWT-ready), Spring Data JPA
+- MySQL 8 (database)
+- SSE / `@Async` (real-time + background processing)
+
+---
+
+## Project Structure
+
+```
+project_sws/
+├── backend/        # Spring Boot API
+└── frontend/       # React app
+```
+
+---
 
 ## Prerequisites
 
-- Java 17+
-- Maven 3.8+
-- Node.js 18+
-- MySQL 8+
+Make sure you have these installed:
 
-## Database Setup
+| Tool | Version |
+|------|---------|
+| Java | 17+ |
+| Node.js | 18+ |
+| MySQL | 8+ |
+
+> No need to install Maven — the project includes `mvnw.cmd` wrapper.
+
+---
+
+## Setup
+
+### 1. Create the Database
+
+Open MySQL and run:
 
 ```sql
 CREATE DATABASE dms_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-Tables are auto-created by Hibernate (`spring.jpa.hibernate.ddl-auto=update`).
+### 2. Set Your MySQL Credentials
 
-## Environment Variables
-
-### Backend (`backend/src/main/resources/application.properties`)
+Open `backend/src/main/resources/application.properties` and update:
 
 ```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/dms_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-spring.datasource.username=root
-spring.datasource.password=root
-
-app.upload.base-dir=uploads
-app.upload.max-file-size-bytes=52428800   # 50MB
-app.jwt.secret=your-256-bit-secret-key-here
-app.jwt.expiration=86400000               # 24 hours in ms
+spring.datasource.username=your_mysql_username
+spring.datasource.password=your_mysql_password
 ```
 
-## Running the Backend
+> Tables are created automatically by Hibernate on first run.
 
-```bash
+---
+
+## Running the App
+
+### Start the Backend
+
+Open a terminal:
+
+```powershell
 cd backend
-mvn spring-boot:run
+.\mvnw.cmd spring-boot:run
 ```
 
-Backend starts on `http://localhost:8080`
+Wait until you see:
+```
+Started DocumentManagementApplication in X.XXX seconds
+```
 
-Uploaded files are stored in `backend/uploads/yyyy/MM/dd/` with UUID filenames.
+Backend runs at → `http://localhost:8080`
 
-## Running the Frontend
+---
 
-```bash
+### Start the Frontend
+
+Open a **second** terminal:
+
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
 
-Frontend starts on `http://localhost:5173`
+Frontend runs at → `http://localhost:5173`
 
-Vite proxies `/api/*` → `http://localhost:8080`
+> Vite automatically proxies all `/api` requests to the backend.
 
-## API Reference
+---
+
+## How File Upload Works
+
+This is the core feature of the app. Here is exactly what happens when you upload a PDF:
+
+### Step 1 — User picks or drops a file
+- `DropZone.tsx` captures the file via drag & drop or file picker (`<input type="file">`)
+- It validates the file before sending:
+  - Only PDF files allowed (`application/pdf`)
+  - Maximum size 50MB
+  - Empty files are rejected
+
+### Step 2 — Frontend sends the file
+- `useUpload.ts` hook calls `documentService.upload()`
+- Axios sends a `POST /api/documents/upload` request with `multipart/form-data`
+- The `onUploadProgress` callback updates the progress bar in real time for each file
+
+### Step 3 — Backend receives and stores the file
+- `DocumentController.java` receives the file as Spring's `MultipartFile`
+- `StorageService.java` writes the file to disk at:
+  ```
+  uploads/yyyy/MM/dd/<uuid>.pdf
+  ```
+- The original filename, size, type and storage path are saved to MySQL
+
+### Step 4 — Background processing
+- `DocumentService.java` triggers `processDocumentAsync()` using `@Async`
+- This runs in a separate thread so the upload response is instant
+- The document status changes: `PENDING → PROCESSING → COMPLETED`
+
+### Step 5 — Real-time notification
+- Once processing completes, a notification is saved to the database
+- The backend pushes it to the frontend via SSE (`SseEmitter`)
+- The frontend receives it and:
+  - Shows a toast message
+  - Updates the notifications page
+  - Refreshes the documents table
+  - Updates the bell badge count
+
+### Upload behavior by file count
+
+| Files uploaded | Behavior |
+|----------------|----------|
+| 1 – 3 files | Each file gets its own notification on completion |
+| More than 3 files | Processed in background using `CompletableFuture`, one combined notification when all done |
+
+---
+
+## API Endpoints
 
 ### Documents
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/documents/upload` | Upload one or more PDFs (multipart) |
-| GET | `/api/documents` | List documents (paginated, filterable) |
-| GET | `/api/documents/{id}` | Get document by ID |
-| GET | `/api/documents/download/{id}` | Download PDF file |
-| DELETE | `/api/documents/{id}` | Delete document |
+| POST | `/api/documents/upload` | Upload one or more PDFs |
+| GET | `/api/documents` | List documents (paginated + filterable) |
+| GET | `/api/documents/{id}` | Get document details |
+| GET | `/api/documents/download/{id}` | Download a PDF |
+| DELETE | `/api/documents/{id}` | Delete a document |
 
-**Query params for GET /api/documents:**
+**Supported query params for listing:**
 - `page`, `size` — pagination
-- `search` — filename search (case-insensitive)
-- `status` — filter by PENDING/PROCESSING/COMPLETED/FAILED
+- `search` — search by filename
+- `status` — filter by PENDING / PROCESSING / COMPLETED / FAILED
 - `sortBy`, `sortDir` — sorting
 
 ### Notifications
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/notifications` | List notifications (paginated) |
+| GET | `/api/notifications` | List all notifications |
 | GET | `/api/notifications/unread-count` | Get unread count |
 | PATCH | `/api/notifications/{id}/read` | Mark one as read |
 | PATCH | `/api/notifications/read-all` | Mark all as read |
 
-### Realtime (SSE)
+### Real-time
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/sse/subscribe` | Subscribe to SSE stream |
+| GET | `/api/sse/subscribe` | Subscribe to live events |
 
-**SSE Events:**
-- `notification` — new notification created (JSON: NotificationDTO)
-- `document-update` — document status changed (JSON: DocumentDTO)
+---
 
-## Realtime Architecture
+## How Real-time Works
 
-The system uses **Server-Sent Events (SSE)** for push notifications:
+1. When the app loads, the frontend connects to `/api/sse/subscribe`
+2. After a file finishes processing, the backend pushes an event through SSE
+3. The frontend receives it instantly and:
+   - Shows a toast notification
+   - Updates the notifications page
+   - Refreshes the documents table
+   - Updates the bell badge count
 
-1. Frontend connects to `/api/sse/subscribe` on app load (via `MainLayout`)
-2. `SseService` maintains a list of active `SseEmitter` connections
-3. When documents are processed or bulk uploads complete, `SseService.broadcast()` pushes events to all connected clients
-4. Frontend `useSSE` hook listens for events and:
-   - Invalidates React Query caches (triggers refetch)
-   - Updates Zustand notification store
-   - Shows toast notifications
+---
 
-**Bulk Upload Logic (> 3 files):**
-- Files are saved to disk synchronously
-- Processing runs via `@Async` thread pool
-- `CompletableFuture.allOf()` waits for all files
-- Single SSE notification sent when all complete
+## File Storage
+
+Uploaded files are stored on disk at:
+```
+backend/uploads/yyyy/MM/dd/<uuid>.pdf
+```
+
+- Original filename is saved in the database
+- UUID is used as the stored filename to avoid conflicts
+- Filenames are sanitized to prevent path traversal attacks
+
+---
 
 ## Running Tests
 
-### Backend
-
-```bash
+**Backend:**
+```powershell
 cd backend
-mvn test
+.\mvnw.cmd test
 ```
 
-### Frontend
-
-```bash
+**Frontend:**
+```powershell
 cd frontend
 npm run test
 ```
 
-## Key Features
+---
 
-- **Drag & Drop Upload** — multi-file, with per-file progress bars
-- **Smart Bulk Notifications** — >3 files triggers background processing + SSE notification
-- **Persistent Notifications** — stored in MySQL, not localStorage
-- **Dark/Light Mode** — persisted in localStorage via Zustand
-- **Real-time Updates** — document status changes pushed via SSE
-- **Secure Downloads** — files served with Content-Disposition headers
-- **Path Traversal Prevention** — filenames sanitized before storage
-- **Global Error Handling** — Spring `@RestControllerAdvice` + Axios interceptors
+## Common Issues
+
+| Problem | Fix |
+|---------|-----|
+| `Port 8080 already in use` | Run `netstat -ano \| findstr ":8080"` then `taskkill /F /PID <pid>` |
+| `Access denied for user 'root'` | Wrong MySQL password in `application.properties` |
+| Notifications not showing | Restart the backend so the latest code is loaded |
+| Frontend blank page | Make sure the backend is running first |
