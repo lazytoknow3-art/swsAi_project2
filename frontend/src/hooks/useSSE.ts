@@ -7,19 +7,37 @@ import { toast } from "@/hooks/useToast";
 
 export function useSSE() {
   const queryClient = useQueryClient();
-  const { addNotification } = useNotificationStore();
+  const { addNotification, setUnreadCount } = useNotificationStore();
 
   useEffect(() => {
     sseClient.connect();
 
     const handleNotification = (data: unknown) => {
       const notification = data as Notification;
+
+      // Add to local store
       addNotification(notification);
+
+      // Invalidate all notification queries so the page refetches
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
 
+      // Refetch unread count immediately and sync to store
+      queryClient.fetchQuery({
+        queryKey: ["notifications-unread"],
+        queryFn: () =>
+          import("@/services/notificationService").then((m) =>
+            m.notificationService.getUnreadCount().then((r) => r.data.data.count)
+          ),
+      }).then((count) => setUnreadCount(count));
+
       toast({
-        title: notification.type === "SUCCESS" ? "✅ Success" : notification.type === "ERROR" ? "❌ Error" : "ℹ️ Info",
+        title:
+          notification.type === "SUCCESS"
+            ? "✅ Upload Complete"
+            : notification.type === "ERROR"
+            ? "❌ Upload Failed"
+            : "ℹ️ Info",
         description: notification.message,
         variant: notification.type === "ERROR" ? "destructive" : "default",
       });
@@ -38,5 +56,5 @@ export function useSSE() {
       sseClient.off("notification", handleNotification);
       sseClient.off("document-update", handleDocumentUpdate);
     };
-  }, [queryClient, addNotification]);
+  }, [queryClient, addNotification, setUnreadCount]);
 }

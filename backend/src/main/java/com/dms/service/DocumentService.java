@@ -55,13 +55,6 @@ public class DocumentService {
         this.sseService = sseService;
     }
 
-    public DocumentDTO uploadSingle(MultipartFile file, String uploadedBy) throws IOException {
-        validateFile(file);
-        Document document = saveDocument(file, uploadedBy);
-        processDocumentAsync(document.getId());
-        return documentMapper.toDTO(document);
-    }
-
     public List<DocumentDTO> uploadMultiple(List<MultipartFile> files, String uploadedBy) throws IOException {
         List<DocumentDTO> results = new ArrayList<>();
         for (MultipartFile file : files) {
@@ -73,7 +66,9 @@ public class DocumentService {
         if (files.size() > 3) {
             processMultipleAsync(results.stream().map(DocumentDTO::getId).toList(), files.size());
         } else {
-            results.forEach(dto -> processDocumentAsync(dto.getId()));
+            for (DocumentDTO dto : results) {
+                processDocumentAsync(dto.getId());
+            }
         }
 
         return results;
@@ -99,6 +94,8 @@ public class DocumentService {
     public void processDocumentAsync(Long documentId) {
         try {
             Document document = documentRepository.findById(documentId).orElseThrow();
+            String fileName = document.getOriginalFileName();
+
             document.setUploadStatus(Document.UploadStatus.PROCESSING);
             documentRepository.save(document);
             sseService.broadcastDocumentUpdate(documentMapper.toDTO(document));
@@ -109,13 +106,25 @@ public class DocumentService {
             document.setProcessingCompletedAt(LocalDateTime.now());
             documentRepository.save(document);
             sseService.broadcastDocumentUpdate(documentMapper.toDTO(document));
+
+            // Create notification for every completed upload
+            notificationService.createAndBroadcast(
+                "\"" + fileName + "\" uploaded successfully",
+                Notification.NotificationType.SUCCESS
+            );
+
             log.info("Document {} processed successfully", documentId);
         } catch (Exception e) {
             log.error("Failed to process document {}: {}", documentId, e.getMessage());
             documentRepository.findById(documentId).ifPresent(doc -> {
+                String fileName = doc.getOriginalFileName();
                 doc.setUploadStatus(Document.UploadStatus.FAILED);
                 documentRepository.save(doc);
                 sseService.broadcastDocumentUpdate(documentMapper.toDTO(doc));
+                notificationService.createAndBroadcast(
+                    "Failed to process \"" + fileName + "\"",
+                    Notification.NotificationType.ERROR
+                );
             });
         }
     }

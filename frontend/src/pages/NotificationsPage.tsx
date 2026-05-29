@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { CheckCheck, Bell, AlertCircle, CheckCircle, Info } from "lucide-react";
-import { useNotifications, useMarkAsRead, useMarkAllAsRead } from "@/hooks/useNotifications";
+import { useQuery } from "@tanstack/react-query";
+import { useMarkAsRead, useMarkAllAsRead } from "@/hooks/useNotifications";
+import { notificationService } from "@/services/notificationService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,7 +18,7 @@ const typeIcon = {
   INFO: <Info className="h-4 w-4 text-blue-500" />,
 };
 
-const typeBadge: Record<Notification["type"], "success" | "destructive" | "info"> = {
+const typeBadge: Record<Notification["type"], string> = {
   SUCCESS: "success",
   ERROR: "destructive",
   INFO: "info",
@@ -26,7 +28,15 @@ export function NotificationsPage() {
   const [page, setPage] = useState(0);
   const [type, setType] = useState("");
 
-  const { data, isLoading } = useNotifications({ page, size: 20, type });
+  // Use staleTime: 0 so any invalidation immediately triggers a refetch
+  const { data, isLoading } = useQuery({
+    queryKey: ["notifications", { page, size: 20, type }],
+    queryFn: () =>
+      notificationService.getAll({ page, size: 20, type: type || undefined }).then((r) => r.data.data),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+
   const markAsRead = useMarkAsRead();
   const markAllAsRead = useMarkAllAsRead();
 
@@ -53,7 +63,10 @@ export function NotificationsPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">All Notifications</CardTitle>
-            <Select value={type || "all"} onValueChange={(v) => { setType(v === "all" ? "" : v); setPage(0); }}>
+            <Select
+              value={type || "all"}
+              onValueChange={(v) => { setType(v === "all" ? "" : v); setPage(0); }}
+            >
               <SelectTrigger className="w-36">
                 <SelectValue placeholder="All types" />
               </SelectTrigger>
@@ -70,12 +83,17 @@ export function NotificationsPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-4 space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
             </div>
           ) : !data?.content.length ? (
             <div className="p-12 text-center">
               <Bell className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
               <p className="text-muted-foreground">No notifications yet</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Notifications will appear here after uploading files
+              </p>
             </div>
           ) : (
             <div>
@@ -94,12 +112,16 @@ export function NotificationsPage() {
                       <Badge variant={typeBadge[n.type] as any} className="text-[10px] px-1.5 py-0">
                         {n.type}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">{formatRelativeTime(n.createdAt)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatRelativeTime(n.createdAt)}
+                      </span>
                     </div>
                   </div>
                   {!n.isRead && (
                     <Button
-                      variant="ghost" size="sm" className="h-7 text-xs shrink-0"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs shrink-0"
                       onClick={() => markAsRead.mutate(n.id)}
                     >
                       Mark read
