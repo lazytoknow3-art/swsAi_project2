@@ -15,10 +15,18 @@ export function MainLayout() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Subtle gradient orbs in background */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-blue-500/5 dark:bg-blue-500/10 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-indigo-500/5 dark:bg-indigo-500/10 blur-3xl" />
+      </div>
+
       <Header />
-      <main className="max-w-7xl mx-auto px-4 py-6">
+
+      <main className="relative max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <Outlet />
       </main>
+
       <Toaster />
     </div>
   );

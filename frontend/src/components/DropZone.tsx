@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Upload, FileX } from "lucide-react";
+import { Upload, FileX, CloudUpload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
 
@@ -14,15 +14,10 @@ function validateFiles(files: File[]): { valid: File[]; errors: string[] } {
   const valid: File[] = [];
   const errors: string[] = [];
   files.forEach((f) => {
-    if (f.type !== "application/pdf") {
-      errors.push(`${f.name}: Only PDF files are allowed`);
-    } else if (f.size > MAX_SIZE) {
-      errors.push(`${f.name}: Exceeds 50MB limit`);
-    } else if (f.size === 0) {
-      errors.push(`${f.name}: File is empty`);
-    } else {
-      valid.push(f);
-    }
+    if (f.type !== "application/pdf") errors.push(`${f.name}: Only PDF files are allowed`);
+    else if (f.size > MAX_SIZE) errors.push(`${f.name}: Exceeds 50MB limit`);
+    else if (f.size === 0) errors.push(`${f.name}: File is empty`);
+    else valid.push(f);
   });
   return { valid, errors };
 }
@@ -30,62 +25,64 @@ function validateFiles(files: File[]): { valid: File[]; errors: string[] } {
 export function DropZone({ onFiles, disabled }: Props) {
   const [dragging, setDragging] = useState(false);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragging(false);
-      if (disabled) return;
-      const files = Array.from(e.dataTransfer.files);
-      const { valid, errors } = validateFiles(files);
-      errors.forEach((err) => toast({ title: "Invalid file", description: err, variant: "destructive" }));
-      if (valid.length > 0) onFiles(valid);
-    },
-    [onFiles, disabled]
-  );
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    if (disabled) return;
+    const files = Array.from(e.dataTransfer.files);
+    const { valid, errors } = validateFiles(files);
+    errors.forEach((err) => toast({ title: "Invalid file", description: err, variant: "destructive" }));
+    if (valid.length > 0) onFiles(valid);
+  }, [onFiles, disabled]);
 
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files ?? []);
-      const { valid, errors } = validateFiles(files);
-      errors.forEach((err) => toast({ title: "Invalid file", description: err, variant: "destructive" }));
-      if (valid.length > 0) onFiles(valid);
-      e.target.value = "";
-    },
-    [onFiles]
-  );
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    const { valid, errors } = validateFiles(files);
+    errors.forEach((err) => toast({ title: "Invalid file", description: err, variant: "destructive" }));
+    if (valid.length > 0) onFiles(valid);
+    e.target.value = "";
+  }, [onFiles]);
 
   return (
     <label
       className={cn(
-        "flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-xl cursor-pointer transition-all",
-        dragging ? "border-primary bg-primary/5 scale-[1.01]" : "border-border hover:border-primary/50 hover:bg-accent/50",
-        disabled && "opacity-50 cursor-not-allowed"
+        "relative flex flex-col items-center justify-center w-full h-52 rounded-2xl cursor-pointer transition-all duration-200 overflow-hidden",
+        "border-2 border-dashed",
+        dragging
+          ? "border-primary bg-primary/5 scale-[1.01] shadow-lg shadow-primary/10"
+          : "border-border hover:border-primary/50 hover:bg-accent/30",
+        disabled && "opacity-50 cursor-not-allowed pointer-events-none"
       )}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
     >
-      <input
-        type="file"
-        accept="application/pdf"
-        multiple
-        className="hidden"
-        onChange={handleChange}
-        disabled={disabled}
+      {/* Background pattern */}
+      <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+        style={{ backgroundImage: "radial-gradient(circle, currentColor 1px, transparent 1px)", backgroundSize: "24px 24px" }}
       />
-      <div className="flex flex-col items-center gap-3 text-center px-4">
-        {dragging ? (
-          <Upload className="h-10 w-10 text-primary animate-bounce" />
-        ) : (
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <Upload className="h-5 w-5 text-primary" />
-          </div>
-        )}
+
+      <input type="file" accept="application/pdf" multiple className="hidden" onChange={handleChange} disabled={disabled} />
+
+      <div className="relative flex flex-col items-center gap-3 text-center px-6">
+        <div className={cn(
+          "h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-200",
+          dragging
+            ? "bg-primary text-primary-foreground scale-110 shadow-lg shadow-primary/30"
+            : "bg-primary/10 text-primary"
+        )}>
+          {dragging
+            ? <CloudUpload className="h-7 w-7 animate-bounce" />
+            : <Upload className="h-7 w-7" />}
+        </div>
+
         <div>
-          <p className="text-sm font-medium">
-            {dragging ? "Drop files here" : "Drag & drop PDFs or click to browse"}
+          <p className="font-semibold text-base">
+            {dragging ? "Drop your files here" : "Drag & drop PDFs here"}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">PDF only · Max 50MB per file</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            or <span className="text-primary font-medium underline underline-offset-2">browse files</span> from your computer
+          </p>
         </div>
       </div>
     </label>
